@@ -1,0 +1,221 @@
+---
+title: "food analysis"
+author: "Ashwin"
+date: "march 23, 2018"
+output: "graph""
+---
+
+```{r, message=FALSE, warning=FALSE} "208.91.198.91
+  library(RMySQL)
+  library(DBI)
+  library(dplyr)
+  library(RColorBrewer)
+  library(ggplot2)
+  library(readr)
+  library(lubridate)
+  library(caret)
+  cols <- brewer.pal(8, "Paired")
+  pal <- colorRampPalette(cols)
+```
+
+```{r Extracting all the tables that we need}
+m <- dbDriver("MySQL")
+con <- dbConnect(m, user = "root", password = "", 
+      dbname = "panifxvg_pani", host =")
+```
+
+```{r}
+ud <- dbSendQuery(con, "select * from user_details")
+user_details <- fetch(ud, n = -1)
+ro <- dbSendQuery(con, "select * from rest_orders")
+rest_orders  <- fetch(ro, n = -1)
+```
+
+```{r}
+m <- dbDriver("MySQL")
+con <- dbConnect(m, user = "panifxvg_pani", password = "paniisrich41", 
+      dbname = "panifxvg_pani", host = "208.91.198.91")
+cc <- dbSendQuery(con, "select * from customers")
+cust <- fetch(cc, n = -1)
+```
+
+```{r}
+m <- dbDriver("MySQL")
+con <- dbConnect(m, user = "panifxvg_pani", password = "paniisrich41", 
+      dbname = "panifxvg_pani", host = "208.91.198.91")
+udi <- dbSendQuery(con, "select * from users_device_info")
+dev_info <- fetch(udi, n = -1)
+brm <- dbSendQuery(con, "select * from billing_rest_master")
+bill_master  <- fetch(brm, n = -1)
+```
+
+```{r to disconnect db follow this}
+all_cons <- dbListConnections(MySQL())
+for(con in all_cons){ 
+      dbDisconnect(con)
+}
+```
+
+```{r user_details table fetch}
+user_details$pani_app_versions <- as.factor(user_details$pani_app_versions)
+version_hist <- data.frame(table(user_details$pani_app_versions))
+colnames(version_hist) <- c("Version", 
+                            "Frequency")
+ggplot(version_hist, aes(Version, Frequency, fill = Version, label = Frequency)) +
+      geom_bar(stat = "identity") +
+      geom_text(position = position_dodge(0.9),stat = "identity", vjust = -0.5) +
+      theme_bw()
+cust_with_007 <- user_details[user_details$pani_app_versions ==
+                "0.0.7", ]$cust_id
+cust_with_008 <- user_details[user_details$pani_app_versions ==
+                "0.0.8", ]$cust_id
+cust_with_009 <- user_details[user_details$pani_app_versions ==
+                "0.0.9", ]$cust_id
+head(cust_with_007, 10) ; head(cust_with_008,10) ; head(cust_with_009, 10)
+```
+
+```{r login_traffic table calculation}
+login_traffic <- data.frame(Last_login = user_details$last_login)
+login_traffic$Hour <- factor(hour(login_traffic$Last_login))
+login_traffic$Minute <- factor(minute(login_traffic$Last_login))
+login_traffic$Second <- factor(second(login_traffic$Last_login))
+login_traffic$wday <- factor(wday(login_traffic$Last_login, label = T))
+login_traffic$Month <- factor(month(login_traffic$Last_login, label = T))
+login_traffic$year <- factor(year(login_traffic$Last_login))
+login_traffic$Day <- factor(day(login_traffic$Last_login))
+head(login_traffic, 10)
+```
+
+
+```{r No. of Orders per Day}
+orders_day <- group_by(login_traffic,Day, year) %>% summarise(Orders = n())
+head(orders_day, 10)
+ggplot(orders_day, aes(Day, Orders, fill = year)) + geom_bar(position = position_dodge(), 
+        stat = "identity") + ggtitle("No. of Orders Per Day") +
+        scale_fill_manual(values = c("orange", "brown"))
+```
+
+
+```{r No. of orders every wday}
+orders_wday <- login_traffic %>% group_by(wday, year) %>% summarise(Orders = n())
+head(orders_wday, 10)
+ggplot(orders_wday, aes(wday, Orders, fill = year)) + geom_bar(stat = "identity", 
+      position = position_dodge()) + ggtitle("No. of Orders every WeekDay")
+```
+
+
+```{r No. of Orders for every month}
+orders_wday_month <- login_traffic %>% group_by(wday, Month) %>% summarise(Orders = n())
+head(orders_wday_month, 10)
+ggplot(orders_wday_month, aes(Month, Orders, fill = wday)) + geom_bar(stat = "identity",
+  position = position_dodge()) + ggtitle("No. of Orders for every Month") + scale_fill_manual(values = pal(7)) + theme_minimal()
+```
+
+
+```{r Heat-map for hour and Day}
+orders_hour_day <- login_traffic %>% group_by(Hour, Day) %>% summarise(Orders = n())
+head(orders_hour_day, 10)
+ggplot(orders_hour_day, aes(Day, Hour, fill = Orders)) + geom_tile(col = "white") + ggtitle("Heatmap for Hour and Day")
+```
+
+
+```{r Heatmap for Month and Day, message=FALSE, warning=FALSE}
+orders_day_month <- login_traffic %>% group_by(Day, Month) %>% summarise(Orders = n())
+head(orders_day_month, 10)
+ggplot(orders_day_month, aes(Month, Day, fill = Orders)) + geom_tile(col = "white") + ggtitle("Heatmap for Month and Day")
+```
+
+
+```{r Obtain gcmid, message=FALSE, warning=FALSE}
+cid <- cust$user_id
+
+rid <- rest_orders$cust_id
+
+rid <- as.numeric(as.character(rid))
+
+uni <- unique(rid)
+
+u1 <- na.omit(uni)
+
+nocust <- cid[-u1]
+
+u1 <- na.omit(uni)
+
+nocust <- cid[-u1]
+
+dat <- subset(cust, select = c(1,2))
+
+dat1 <- data.frame(user_id = nocust)
+
+m <- merge(dat, dat1, by = "user_id")
+
+user_id <- m$user_id
+
+gcmid <- data.frame(user_id = dev_info$user_id, gcmid = dev_info$gcmid)
+
+user_id <- data.frame(user_id = user_id)
+
+gcmid_ans <- merge(gcmid, user_id, by = "user_id")
+
+head(gcmid_ans, 10)
+```
+
+
+```{r Prediction function for Restaurant Orders, message=FALSE, warning=FALSE}
+  r_orders <- data.frame(Date = ymd_hms(rest_orders$delivery_date))
+  r_orders$wday <- factor(wday(r_orders$Date, label = T))
+  r_orders$Month <- factor(month(r_orders$Date, label = T))
+  r_orders$Year <- factor(year(r_orders$Date))
+  r_orders$Day <- factor(day(r_orders$Date))
+  orders_new <- r_orders %>% group_by(Year, Month, wday, Day) %>% 
+            summarise(Orders = n())
+ ## w <- which(orders_new$Orders == 51)
+  ##orders_new <- orders_new[-w, ]
+  head(orders_new, 10)
+RestOrders <- function(date){
+  mod.rfnew1 <- train(Orders ~ ., data = orders_new,
+                trControl = trainControl(method = "repeatedcv", repeats = 2, number = 5),
+                method = "rf", preProcess = c("center", "scale"), na.action = na.omit)
+  y <- as.factor(year(date))
+  m <- as.factor(month(date, label = T))
+  wd <- as.factor(wday(date, label = T))
+  d <- as.factor(day(date))
+  p <- round(predict(mod.rfnew1, newdata = data.frame(Year = y, Month = m,
+        wday = wd, Day = d)))
+  lowerlimit <- round((p * 0.75))
+  upperlimit <- round((p * 1.25))
+  print(paste(sep = " ", "The Predicted Orders for", date, "are", p,
+              ".With a confidence interval of",lowerlimit, "to", upperlimit))
+}
+RestOrders("2017-06-09")
+```
+```{r Prediction Function for All Orders, message=FALSE, warning=FALSE}
+login_details <- data.frame(Last_login = bill_master$delivery_date)
+  login_details$wday <- factor(wday(login_details$Last_login, label = T))
+  login_details$Month <- factor(month(login_details$Last_login, label = T))
+  login_details$Year <- factor(year(login_details$Last_login))
+  login_details$Day <- factor(day(login_details$Last_login))
+  orders_all <- login_details %>% group_by(Year, Month, wday, Day) %>% 
+    summarise(Orders = n())
+  orders_all <- orders_all[-c(1,2,3,4), ]
+  orders_all$Year <- as.character(orders_all$Year)
+  orders.2015 <- orders_new[1:217, ]
+  orders.2015$Year <- as.character(orders.2015$Year)
+  all.orders <- bind_rows(orders.2015, orders_all)
+  all.orders$Year <- as.factor(all.orders$Year)
+  head(all.orders)
+  AllOrders <- function(date){
+  mod.rfall <- train(Orders ~ ., data = all.orders, trControl = 
+  trainControl(method  = "repeatedcv", repeats = 2, number = 5), method = "rf", na.action = na.omit)
+  y <- as.factor(year(date))
+  m <- as.factor(month(date, label = T))
+  wd <- as.factor(wday(date, label = T))
+  d <- as.factor(day(date))
+  p <- round(predict(mod.rfall, newdata = data.frame(Year = y, Month = m, wday = wd, Day = d)))
+  lowerlimit <- round((p * 0.75))
+  upperlimit <- round((p * 1.25))
+  print(paste(sep = " ", "The Predicted Orders for", date, "are", p,
+              ".With a confidence interval of",lowerlimit, "to", upperlimit))
+}
+AllOrders("2017-06-09")
+```
